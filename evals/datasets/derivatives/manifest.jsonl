@@ -1,0 +1,4 @@
+{"kind": "exact_duplicate", "of_sample_id": "layout_c-01", "path": "layout_c-01.pdf"}
+{"kind": "possible_business_duplicate", "of_sample_id": "layout_c-01", "path": "business_duplicate_different_bytes.pdf"}
+{"kind": "corrupt_input", "of_sample_id": null, "path": "corrupt.pdf"}
+{"kind": "encrypted_input", "of_sample_id": null, "path": "encrypted.pdf"}

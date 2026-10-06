@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>{% block title %}InvoiceOps{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Pular para o conteúdo</a>
+  <header class="topbar">
+    <a class="brand" href="/documents" aria-label="InvoiceOps, início">Invoice<span>Ops</span></a>
+    {% if user %}
+    <nav aria-label="Navegação principal">
+      <a href="/documents">Documentos</a>
+      <a href="/api/v1/exports.csv">Exportar CSV</a>
+      <a href="/api/v1/exports.xlsx">Exportar XLSX</a>
+    </nav>
+    <div class="identity">
+      <span>{{ workspace }}</span>
+      <span class="mode-pill {{ 'demo' if mode == 'demo' else 'real' }}">{{ 'DEMO — SIMULADA' if mode == 'demo' else 'EXTRAÇÃO REAL' }}</span>
+      <form action="/logout" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="button button-quiet" type="submit">Sair</button>
+      </form>
+    </div>
+    {% endif %}
+  </header>
+  <main id="main" class="page">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer">InvoiceOps · Demonstração fictícia · Toda aprovação exige revisão humana.</footer>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Entrar · InvoiceOps{% endblock %}
+{% block content %}
+<section class="login-wrap" aria-labelledby="login-title">
+  <div class="panel login-card">
+    <p class="eyebrow">DOCUMENTOS SOB CONTROLE</p>
+    <h1 id="login-title">Entre no InvoiceOps</h1>
+    <p class="muted">Ambiente demonstrativo da empresa fictícia Café Aurora.</p>
+    {% if error %}<p class="alert alert-error" role="alert">{{ error }}</p>{% endif %}
+    <form action="/login" method="post" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="username">Usuário</label>
+      <input id="username" name="username" autocomplete="username" required>
+      <label for="password">Senha</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <button class="button button-primary" type="submit">Entrar</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

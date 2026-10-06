@@ -1,0 +1,92 @@
+[
+  {
+    "id": "nbL3HShTxo8tFpAt",
+    "name": "InvoiceOps approved records (demo)",
+    "active": false,
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "invoiceops/approved",
+          "authentication": "headerAuth",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          0,
+          0
+        ],
+        "id": "afe4ca5b-5ba4-417d-b620-52583c92f7fd",
+        "name": "Webhook",
+        "webhookId": "bc522814-665b-4f2b-bd1a-4effeb46c04f"
+      },
+      {
+        "parameters": {
+          "resource": "database",
+          "operation": "executeQuery",
+          "query": "WITH incoming AS (\n  SELECT $1::text AS idempotency_key, $2::jsonb AS payload\n),\nvalidated AS (\n  SELECT idempotency_key, payload\n  FROM incoming\n  WHERE jsonb_typeof(payload) = 'object'\n    AND payload ?& ARRAY['schema_version', 'event_id', 'document_id', 'revision_id', 'approved_at', 'document_sha256', 'fields']\n    AND payload->>'schema_version' = 'invoiceops.approved.v1'\n    AND length(payload->>'event_id') BETWEEN 1 AND 64\n    AND idempotency_key = 'invoiceops-v1-' || (payload->>'event_id')\n    AND payload->>'document_sha256' ~ '^[a-f0-9]{64}$'\n    AND jsonb_typeof(payload->'fields') = 'object'\n    AND jsonb_typeof(payload->'fields'->'items') = 'array'\n),\nattempted AS (\n  INSERT INTO invoiceops_n8n_demo_records (idempotency_key, payload)\n  SELECT idempotency_key, payload\n  FROM validated\n  ON CONFLICT (idempotency_key) DO UPDATE\n    SET idempotency_key = EXCLUDED.idempotency_key\n    WHERE invoiceops_n8n_demo_records.payload = EXCLUDED.payload\n  RETURNING idempotency_key\n)\nSELECT 'processed'::text AS status, 200::integer AS response_code\nFROM attempted\nUNION ALL\nSELECT 'conflict'::text AS status, 409::integer AS response_code\nWHERE EXISTS (SELECT 1 FROM validated)\n  AND NOT EXISTS (SELECT 1 FROM attempted)\nUNION ALL\nSELECT 'invalid'::text AS status, 400::integer AS response_code\nWHERE NOT EXISTS (SELECT 1 FROM validated)",
+          "options": {
+            "queryReplacement": "={{ [ $json.headers[\"idempotency-key\"] || \"\", JSON.stringify($json.body || null) ] }}"
+          }
+        },
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          240,
+          0
+        ],
+        "id": "e2eca097-ced5-4936-8d09-a208aea3bf64",
+        "name": "Persist approved event"
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ { status: $json.status } }}",
+          "options": {
+            "responseCode": "={{ $json.response_code }}"
+          }
+        },
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          480,
+          0
+        ],
+        "id": "71a553b3-952c-4310-9f4d-3c0c3d6cc819",
+        "name": "Respond to Webhook"
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Persist approved event",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Persist approved event": {
+        "main": [
+          [
+            {
+              "node": "Respond to Webhook",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1",
+      "binaryMode": "separate"
+    },
+    "staticData": null,
+    "pinData": {}
+  }
+]

@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+        env:
+          POSTGRES_DB: invoiceops
+          POSTGRES_USER: invoiceops
+          POSTGRES_PASSWORD: ci-database-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U invoiceops -d invoiceops"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      APP_ENV: development
+      INVOICEOPS_MODE: demo
+      SESSION_SECRET: ci-session-secret-with-at-least-32-characters
+      DATABASE_URL: postgresql+psycopg://invoiceops:ci-database-password@127.0.0.1:5432/invoiceops
+      REDIS_URL: redis://127.0.0.1:6379/0
+      UPLOAD_DIR: ${{ github.workspace }}/.ci-uploads
+      WEBHOOK_URL: http://127.0.0.1:8000/integration/test/receive
+      WEBHOOK_SECRET: ci-webhook-secret-with-at-least-32-characters
+      INVOICEOPS_RUN_INTEGRATION: "1"
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: "0.11.7"
+          enable-cache: true
+      - name: Install OCR and project dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-por
+          uv sync --frozen --all-extras
+      - name: Static checks
+        run: |
+          uv run ruff check src tests scripts evals
+          uv run mypy src/invoiceops
+      - name: Apply and verify migrations
+        run: |
+          uv run alembic upgrade head
+          uv run alembic upgrade head
+          uv run alembic check
+      - name: Tests
+        run: uv run pytest -q

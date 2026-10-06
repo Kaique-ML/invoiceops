@@ -1,0 +1,146 @@
+services:
+  db:
+    image: postgres@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    environment:
+      POSTGRES_DB: invoiceops
+      POSTGRES_USER: invoiceops
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Run scripts/demo.ps1 to create a local ignored .env file}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U invoiceops -d invoiceops"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+
+  redis:
+    image: redis@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "192mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+
+  api:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://invoiceops:${DB_PASSWORD}@db:5432/invoiceops
+      REDIS_URL: redis://redis:6379/0
+      UPLOAD_DIR: /var/lib/invoiceops/uploads
+    command: ["uv", "run", "--no-sync", "sh", "-c", "alembic upgrade head && uvicorn invoiceops.api:app --host 0.0.0.0 --port 8000"]
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - uploads:/var/lib/invoiceops/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [backend, frontend]
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  worker:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://invoiceops:${DB_PASSWORD}@db:5432/invoiceops
+      REDIS_URL: redis://redis:6379/0
+      UPLOAD_DIR: /var/lib/invoiceops/uploads
+    command: ["uv", "run", "--no-sync", "celery", "-A", "invoiceops.worker:celery_app", "worker", "--loglevel=INFO", "--concurrency=1"]
+    user: "10001:10001"
+    volumes:
+      - uploads:/var/lib/invoiceops/uploads:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    networks: [backend, ollama_host]
+    cpus: 1.0
+    mem_limit: 2g
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n@sha256:fdce8f852ac7abbb2f31a53170bc3c2eeec45c37c0692a99f2d6c11b3822cd98
+    profiles: ["n8n"]
+    ports:
+      - "127.0.0.1:5679:5678"
+    environment:
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?Run scripts/demo.ps1 to create a local ignored .env file}
+      N8N_HOST: n8n
+      N8N_LISTEN_ADDRESS: 0.0.0.0
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      N8N_EDITOR_BASE_URL: http://127.0.0.1:5679/
+      WEBHOOK_URL: http://n8n:5678/
+      N8N_SECURE_COOKIE: "false"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend, frontend]
+    cpus: 1.0
+    mem_limit: 1g
+
+  checks:
+    build:
+      context: .
+      args:
+        INSTALL_DEV: "1"
+    profiles: ["checks"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://invoiceops:${DB_PASSWORD}@db:5432/invoiceops
+      REDIS_URL: redis://redis:6379/0
+      UPLOAD_DIR: /var/lib/invoiceops/uploads
+      INVOICEOPS_RUN_INTEGRATION: "1"
+    command:
+      - sh
+      - -c
+      - >-
+        uv run --no-sync ruff check src tests scripts evals &&
+        uv run --no-sync mypy src/invoiceops &&
+        uv run --no-sync alembic upgrade head &&
+        uv run --no-sync alembic upgrade head &&
+        uv run --no-sync alembic check &&
+        uv run --no-sync pytest -q
+    volumes:
+      - uploads:/var/lib/invoiceops/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    networks: [backend, ollama_host]
+    mem_limit: 1g
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads:
+  n8n_data:
+
+networks:
+  backend:
+    internal: true
+  frontend:
+    driver: bridge
+  ollama_host:
+    driver: bridge

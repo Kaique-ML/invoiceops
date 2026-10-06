@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Documentos · InvoiceOps{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">OPERAÇÃO DOCUMENTAL</p>
+    <h1>Documentos</h1>
+    <p class="muted">Arquivos, processamento, revisão e decisão humana em um só fluxo.</p>
+  </div>
+  <a class="button button-secondary" href="/api/v1/exports.csv">Exportar aprovados</a>
+</section>
+
+{% if mode == "demo" %}
+<div class="alert alert-demo" role="status">
+  <strong>DEMO — EXTRAÇÃO SIMULADA.</strong> Somente os arquivos sintéticos distribuídos com o projeto são aceitos neste modo. Isso não demonstra extração inteligente de documentos arbitrários.
+</div>
+{% else %}
+<div class="alert alert-note" role="status">
+  Extração real selecionada. Requer Ollama disponível e um modelo local configurado; nenhum fallback simulado será usado.
+</div>
+{% endif %}
+
+<section class="panel upload-panel" aria-labelledby="upload-title">
+  <div>
+    <h2 id="upload-title">Adicionar documento</h2>
+    <p class="muted">PDF, PNG ou JPEG · Até 10 MiB · Processamento em segundo plano.</p>
+  </div>
+  {% if user.role in ["admin", "reviewer"] %}
+  <form action="/upload" method="post" enctype="multipart/form-data" class="upload-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="file-picker" for="file">Selecionar arquivo</label>
+    <input id="file" name="file" type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" required>
+    <button class="button button-primary" type="submit">Enviar para processamento</button>
+  </form>
+  {% else %}
+  <p class="muted">Seu perfil permite consulta e exportação, mas não envio.</p>
+  {% endif %}
+</section>
+
+<section class="panel" aria-labelledby="list-title">
+  <div class="section-heading">
+    <h2 id="list-title">Fila de documentos</h2>
+    <form class="filters" action="/documents" method="get">
+      <label class="sr-only" for="q">Buscar pelo nome do arquivo</label>
+      <input id="q" name="q" value="{{ query }}" placeholder="Buscar arquivo">
+      <label class="sr-only" for="state">Filtrar por processamento</label>
+      <select id="state" name="state">
+        <option value="">Todos os estados</option>
+        {% for option in ["queued", "processing", "completed", "failed"] %}
+        <option value="{{ option }}" {{ "selected" if state == option else "" }}>{{ option }}</option>
+        {% endfor %}
+      </select>
+      <button class="button button-quiet" type="submit">Filtrar</button>
+    </form>
+  </div>
+  {% if documents %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Arquivo</th><th scope="col">Processamento</th><th scope="col">Revisão</th><th scope="col">Entrega</th><th scope="col">Recebido</th></tr></thead>
+      <tbody>
+        {% for doc in documents %}
+        <tr>
+          <td><a class="document-link" href="/documents/{{ doc.id }}">{{ doc.original_name }}</a><small>{{ doc.content_type }} · {{ doc.size_bytes }} bytes</small></td>
+          <td><span class="status status-{{ doc.processing_status }}">{{ doc.processing_status }}</span></td>
+          <td>{{ doc.review_status }}</td>
+          <td>{{ doc.delivery_status }}</td>
+          <td><time datetime="{{ doc.created_at.isoformat() }}">{{ doc.created_at.strftime("%Y-%m-%d %H:%M UTC") }}</time></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <span class="empty-mark" aria-hidden="true">↗</span>
+    <h3>Nenhum documento nesta página</h3>
+    <p class="muted">Envie um arquivo permitido ou ajuste os filtros de busca.</p>
+  </div>
+  {% endif %}
+  <div class="pagination">
+    {% if page > 1 %}<a class="button button-quiet" href="/documents?page={{ page - 1 }}&q={{ query }}&state={{ state }}">Anterior</a>{% endif %}
+    <span>Página {{ page }}</span>
+    {% if documents|length == 25 %}<a class="button button-quiet" href="/documents?page={{ page + 1 }}&q={{ query }}&state={{ state }}">Próxima</a>{% endif %}
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}{{ document.original_name }} · InvoiceOps{% endblock %}
+{% block content %}
+<p class="breadcrumb"><a href="/documents">Documentos</a> / {{ document.original_name }}</p>
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">REVISÃO HUMANA</p>
+    <h1>{{ document.original_name }}</h1>
+    <p class="muted document-meta">SHA-256 {{ document.sha256 }} · Versão {{ document.version }}</p>
+  </div>
+  <div class="status-row">
+    <span class="status status-{{ document.processing_status }}">{{ document.processing_status }}</span>
+    <span class="status">{{ document.review_status }}</span>
+    <span class="status">{{ document.delivery_status }}</span>
+  </div>
+</section>
+{% if notice %}<p class="alert alert-success" role="status">{{ notice }}</p>{% endif %}
+{% if document.last_error %}<p class="alert alert-error" role="alert">{{ document.last_error }}</p>{% endif %}
+{% if mode == "demo" %}<p class="alert alert-demo"><strong>DEMO — EXTRAÇÃO SIMULADA.</strong> Os valores só correspondem aos arquivos sintéticos fornecidos.</p>{% endif %}
+
+{% if revision %}
+<section class="review-grid" aria-label="Documento original e campos extraídos">
+  <article class="panel original-panel">
+    <div class="section-heading">
+      <div><p class="eyebrow">EVIDÊNCIA ORIGINAL</p><h2>Arquivo recebido</h2></div>
+      <a class="button button-quiet" href="/documents/{{ document.id }}/file">Baixar original</a>
+    </div>
+    <p class="muted">Arquivo privado · {{ document.content_type }} · {{ document.size_bytes }} bytes</p>
+    <h3>Texto por página</h3>
+    {% if document.content_type in ["image/png", "image/jpeg"] %}
+    <img class="source-image" src="/documents/{{ document.id }}/file" alt="Imagem original do documento enviado">
+    {% endif %}
+    {% for source_page in revision.source_pages %}
+    <details open>
+      <summary>Página {{ source_page.page }} · {{ source_page.method }}</summary>
+      <pre class="page-text">{{ source_page.text }}</pre>
+    </details>
+    {% else %}
+    <p class="muted">A extração ainda não produziu texto de página.</p>
+    {% endfor %}
+  </article>
+
+  <article class="panel fields-panel">
+    <p class="eyebrow">REVISÃO {{ revision.number }} · {{ revision.mode }}</p>
+    <h2>Dados do documento</h2>
+    <p><strong>Tipo:</strong> {{ revision.normalized.get("document_type") or "Não identificado" }}</p>
+    {% if revision.issues %}
+    <div class="alert alert-error" role="alert">
+      <h3>Validações que exigem atenção</h3>
+      <ul>{% for issue in revision.issues %}<li><strong>{{ issue.field }}:</strong> {{ issue.message }}</li>{% endfor %}</ul>
+    </div>
+    {% else %}
+    <p class="alert alert-success">Nenhum problema de validação detectado. Isso não confirma a veracidade dos dados.</p>
+    {% endif %}
+    {% if user.role in ["admin", "reviewer"] and document.processing_status == "completed" %}
+    {% if revision.approved_at %}
+    <p class="alert alert-demo">Salvar uma correção revoga a aprovação atual. Entregas anteriores permanecem no histórico e não são atualizadas automaticamente.</p>
+    {% endif %}
+    <form action="/documents/{{ document.id }}/review" method="post" class="review-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="version" value="{{ document.version }}">
+      {% for field, label in [
+        ("supplier","Fornecedor"), ("tax_identifier","Identificador fiscal"),
+        ("document_number","Número do documento"), ("issue_date","Data de emissão"), ("currency","Moeda"),
+        ("subtotal","Subtotal"), ("discounts","Descontos"), ("taxes","Tributos"),
+        ("shipping","Frete"), ("total","Total")
+      ] %}
+      <label for="{{ field }}">{{ label }}</label>
+      <input id="{{ field }}" name="{{ field }}" value="{{ revision.normalized.get(field) or '' }}" autocomplete="off">
+      {% endfor %}
+      <label for="reason">Motivo da correção (opcional)</label>
+      <input id="reason" name="reason" maxlength="500">
+      <button class="button button-secondary" type="submit">Salvar nova revisão</button>
+    </form>
+    {% if revision.approved_at is none %}
+    <div class="action-row">
+      <form action="/documents/{{ document.id }}/approve" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="version" value="{{ document.version }}">
+        <button class="button button-primary" type="submit" {{ "disabled" if has_blocking_issues else "" }}>Aprovar revisão</button>
+      </form>
+      <form action="/documents/{{ document.id }}/reject" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="version" value="{{ document.version }}">
+        <label class="sr-only" for="reject-reason">Motivo da rejeição</label>
+        <input id="reject-reason" name="reason" placeholder="Motivo da rejeição">
+        <button class="button button-danger" type="submit">Rejeitar</button>
+      </form>
+    </div>
+    {% endif %}
+    {% endif %}
+    {% if document.processing_status == "failed" and user.role in ["admin", "reviewer"] %}
+    <form action="/documents/{{ document.id }}/reprocess" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="button button-secondary" type="submit">Tentar novamente</button>
+    </form>
+    {% endif %}
+    {% if revision.approved_at %}
+    <p class="alert alert-success">Snapshot aprovado em {{ revision.approved_at.strftime("%Y-%m-%d %H:%M UTC") }}. Edições criam uma nova revisão.</p>
+    {% if user.role == "admin" %}
+      {% if webhook_configured %}
+      <form action="/documents/{{ document.id }}/deliver" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="button button-secondary" type="submit">Enviar snapshot aprovado</button>
+      </form>
+      {% else %}
+      <p class="muted">Webhook não configurado pelo administrador.</p>
+      {% endif %}
+    {% endif %}
+    {% endif %}
+    <details>
+      <summary>Rastreabilidade da extração</summary>
+      <p>Modo: {{ revision.mode }} · Modelo: {{ revision.model_name or "nenhum (fixture)" }} · Prompt: {{ revision.prompt_version }}</p>
+      <pre class="page-text">{{ revision.extracted | tojson(indent=2) }}</pre>
+    </details>
+  </article>
+</section>
+{% else %}
+<section class="panel empty-state">
+  {% if document.processing_status in ["queued", "processing"] %}
+  <h2>Processamento em andamento</h2><p class="muted">O resultado só será exibido quando a tentativa terminar.</p>
+  {% else %}
+  <h2>Extração indisponível</h2><p class="muted">Veja o diagnóstico acima ou reenvie o documento após corrigir a causa.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+<section class="panel history-panel" aria-labelledby="delivery-title">
+  <h2 id="delivery-title">Histórico de integrações</h2>
+  {% if deliveries %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Entrega</th><th scope="col">Revisão</th><th scope="col">Estado</th><th scope="col">Tentativas</th><th scope="col">Resposta</th></tr></thead>
+      <tbody>
+        {% for delivery in deliveries %}
+        <tr><td>{{ delivery.idempotency_key }}</td><td>{{ delivery.revision_id }}</td><td>{{ delivery.state }}</td><td>{{ delivery.attempts }}</td><td>{{ delivery.response_status or delivery.last_error or "Aguardando" }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="muted">Nenhuma entrega solicitada.</p>{% endif %}
+</section>
+
+<section class="panel history-panel" aria-labelledby="history-title">
+  <h2 id="history-title">Histórico de auditoria</h2>
+  {% if audit %}
+  <ol class="audit-list">
+    {% for event in audit %}
+    <li><time datetime="{{ event.created_at.isoformat() }}">{{ event.created_at.strftime("%Y-%m-%d %H:%M UTC") }}</time>
+      <strong>{{ event.action }}</strong>
+      {% if event.field_name %}<span>{{ event.field_name }}: {{ event.old_value or "ausente" }} → {{ event.new_value or "ausente" }}</span>{% endif %}
+      {% if event.reason %}<span>Motivo: {{ event.reason }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}<p class="muted">Nenhuma decisão ou correção registrada até o momento.</p>{% endif %}
+</section>
+{% endblock %}
