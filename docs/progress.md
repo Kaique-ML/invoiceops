@@ -20,4 +20,4 @@ Updated: 2026-10-05 (America/Manaus)
 
 ## Publication
 
-GitHub owner authentication was verified as personal account `Kaique-ML`; `Kaique-ML/invoiceops` was absent before creation. Repository URL, commit SHA and CI conclusion are added after the remote verification step. No license has been selected.
+GitHub owner authentication was verified as personal account `Kaique-ML`. A new public personal repository was created at <https://github.com/Kaique-ML/invoiceops>; no pre-existing project was overwritten. The first `main` push matched local and remote SHA, and its complete CI run passed in 1m05s. The final documentation-only SHA and its CI run are verified before handoff. No license has been selected.

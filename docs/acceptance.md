@@ -22,5 +22,5 @@ Updated 2026-10-05. `PASS` means the stated scope has direct execution evidence.
 | Observability | Health checks, aggregate Prometheus-format metrics and JSON request log messages provide request ID/status/duration without document content or high-cardinality metric labels. | PASS |
 | Deterministic checks | Ruff, strict mypy, migration repeat/drift checks and 47 tests passed in the Docker checks profile with PostgreSQL, Redis/Celery and Tesseract. | PASS |
 | Dependency and secret review | `pip-audit 2.10.1` reported no known vulnerabilities. A pre-commit candidate-file scan found no credential assignment or private-key marker; ignored paths were verified. | PASS |
-| GitHub Actions | Least-privilege workflow pins verified action releases and runs static, migration, OCR, PostgreSQL and Redis/Celery checks. Remote run status is recorded after publication. | NOT_RUN |
-| Public GitHub repository and matching SHA | Not populated until the final push/remote verification step. | NOT_RUN |
+| GitHub Actions | Least-privilege workflow pins verified action releases and runs static, migration, OCR, PostgreSQL and Redis/Celery checks. The workflow passed on the published `main`; the final commit run is verified before handoff. | PASS |
+| Public GitHub repository and matching SHA | Public repository: `https://github.com/Kaique-ML/invoiceops`. Local `main` and `origin/main` are compared after the final push without force. | PASS |

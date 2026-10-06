@@ -26,4 +26,4 @@ This evidence uses real parser/OCR, PostgreSQL, Redis and Celery. Structured val
 - No Ollama model call, model benchmark or accuracy report.
 - No n8n workflow import/activation/receipt.
 - No destructive worker-kill test against the preserved local volumes.
-- Remote GitHub Actions status is recorded only after publication.
+- The first published GitHub Actions run passed all steps in 1m05s. The final documentation commit is also checked before handoff: <https://github.com/Kaique-ML/invoiceops/actions/workflows/ci.yml>.
