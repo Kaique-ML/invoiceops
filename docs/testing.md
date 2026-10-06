@@ -12,6 +12,7 @@ Command: `./scripts/test.ps1`. It builds the checks image and uses real PostgreS
 - pytest 9.1.1: **47 passed in 7.63 seconds**.
 - `pip-audit 2.10.1 --strict`: no known vulnerabilities found.
 - Candidate tracked-file scan: no credential assignment or private-key marker found; `.env`, `.venv` and tool caches were confirmed ignored.
+- The quickstart detected that another project owned port 8000, selected 8001 without stopping it, started the full Compose stack, and reached ready with database, Redis and OCR healthy.
 
 The 47 tests include real OCR for text/image inputs, money/date ambiguity, evidence validation, one-repair model behavior, export sanitization, the 24-document dataset contract, evaluation scoring, approval/correction/audit, workspace and role isolation, exact-duplicate database constraint, durable outbox behavior under broker failure, aggregate metrics and a real Redis/Celery worker consuming a JSON task.
 

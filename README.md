@@ -23,7 +23,7 @@ Requirements: Docker Desktop with the Linux container engine and Docker Compose.
 docker compose exec api uv run --no-sync python -m invoiceops.cli seed-demo
 ```
 
-The seed command explicitly creates the local demonstration account and prints its generated password once. Save it locally; a later seed run does not reset or reveal an existing password. Open <http://127.0.0.1:8000>. The app only accepts the bundled synthetic files in demo mode and shows a clear simulation label.
+The seed command explicitly creates the local demonstration account and prints its generated password once. Save it locally; a later seed run does not reset or reveal an existing password. The script prints the loopback URL (normally port 8000; it selects the first free port through 8099 and records it in the ignored `.env`). The app only accepts the bundled synthetic files in demo mode and shows a clear simulation label.
 
 Run the project checks with:
 

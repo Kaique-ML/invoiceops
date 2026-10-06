@@ -13,6 +13,32 @@ function New-LocalSecret {
     }
 }
 
+function Test-LoopbackPortAvailable([int]$Port) {
+    $listener = [System.Net.Sockets.TcpListener]::new(
+        [System.Net.IPAddress]::Loopback,
+        $Port
+    )
+    try {
+        $listener.Start()
+        return $true
+    } catch [System.Net.Sockets.SocketException] {
+        return $false
+    } finally {
+        $listener.Stop()
+    }
+}
+
+function Find-AvailableAppPort {
+    foreach ($candidate in 8000..8099) {
+        if (Test-LoopbackPortAvailable -Port $candidate) {
+            return $candidate
+        }
+    }
+    throw "No available loopback port was found between 8000 and 8099."
+}
+
+$appPort = Find-AvailableAppPort
+
 if (-not (Test-Path -LiteralPath ".env")) {
     $random = [System.Security.Cryptography.RandomNumberGenerator]::Create()
     $secretBytes = [byte[]]::new(48)
@@ -27,6 +53,7 @@ if (-not (Test-Path -LiteralPath ".env")) {
     $random.Dispose()
     @(
         "APP_ENV=development"
+        "APP_PORT=$appPort"
         "INVOICEOPS_MODE=demo"
         "SESSION_SECRET=$sessionSecret"
         "DB_PASSWORD=$databasePassword"
@@ -46,6 +73,13 @@ if (-not (Test-Path -LiteralPath ".env")) {
     Write-Output "Added a local n8n encryption key to the ignored .env file."
 }
 
+if (Select-String -Quiet -Path ".env" -Pattern '^APP_PORT=') {
+    $appPort = [int]((Select-String -Path ".env" -Pattern '^APP_PORT=(\d+)$').Matches[0].Groups[1].Value)
+} else {
+    Add-Content -Encoding ascii -LiteralPath ".env" -Value "APP_PORT=$appPort"
+    Write-Output "Selected available loopback port $appPort and saved it in the ignored .env file."
+}
+
 & docker compose up --build -d
 if ($LASTEXITCODE -ne 0) {
     throw "Docker Compose failed to build or start the services."
@@ -53,9 +87,9 @@ if ($LASTEXITCODE -ne 0) {
 Write-Output "Waiting for the API health endpoint..."
 for ($attempt = 0; $attempt -lt 30; $attempt++) {
     try {
-        $health = Invoke-RestMethod -Uri "http://127.0.0.1:8000/health/ready" -TimeoutSec 3
+        $health = Invoke-RestMethod -Uri "http://127.0.0.1:$appPort/health/ready" -TimeoutSec 3
         if ($health.status -eq "ready") {
-            Write-Output "InvoiceOps is ready at http://127.0.0.1:8000"
+            Write-Output "InvoiceOps is ready at http://127.0.0.1:$appPort"
             Write-Output "Create the explicit local demo account with:"
             Write-Output "  docker compose exec api uv run --no-sync python -m invoiceops.cli seed-demo"
             exit 0
